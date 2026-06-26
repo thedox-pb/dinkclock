@@ -19,6 +19,7 @@
     --volt-dim:  #9fc02f;
     --warm:      #ffb020;   /* warm-up phase */
     --danger:    #ff4d5e;   /* time low / capped */
+    --timeout:   #3aa0ff;   /* team time-out */
     --ok:        #38e08a;
     --shadow:    0 18px 50px -20px rgba(0,0,0,.8);
   }
@@ -82,6 +83,8 @@
   .btn.primary:hover { background: #e4ff66; }
   .btn.ghost { background: transparent; }
   .btn.danger { color: var(--danger); border-color: rgba(255,77,94,.4); background: rgba(255,77,94,.08); }
+  .btn.to { color: var(--timeout); border-color: rgba(58,160,255,.4); background: rgba(58,160,255,.1); }
+  .btn.to:hover { border-color: rgba(58,160,255,.7); }
   .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
   .btn svg { width: 16px; height: 16px; }
 
@@ -98,7 +101,7 @@
 
   .form-grid {
     display: grid;
-    grid-template-columns: 1.4fr 1fr 1fr 0.9fr 0.9fr auto;
+    grid-template-columns: 1.2fr 1.4fr 0.8fr 0.8fr 0.8fr auto;
     gap: 12px; align-items: end;
   }
   @media (max-width: 920px){ .form-grid{ grid-template-columns: 1fr 1fr; } }
@@ -140,6 +143,7 @@
   .court[data-phase="match"]::before  { background: linear-gradient(90deg, var(--volt), var(--ok)); }
   .court[data-phase="low"]::before    { background: linear-gradient(90deg, var(--danger), #ff8a3d); }
   .court[data-phase="done"]::before   { background: var(--danger); }
+  .court[data-timeout]::before        { background: linear-gradient(90deg, var(--timeout), #8fd0ff); }
 
   .court-head {
     display: flex; align-items: flex-start; gap: 10px;
@@ -155,6 +159,21 @@
   }
   .icon-btn:hover { color: var(--danger); background: rgba(255,77,94,.1); }
   .icon-btn svg { width: 17px; height: 17px; }
+  .icon-btn.edit:hover { color: var(--volt); background: rgba(214,255,63,.1); }
+
+  .edit-panel {
+    position: absolute; inset: 0; z-index: 6;
+    background: rgba(10,14,20,.96); backdrop-filter: blur(7px);
+    border-radius: 20px; padding: 18px; overflow: auto;
+    display: none; flex-direction: column; gap: 12px;
+  }
+  .court[data-editing] { min-height: 560px; }
+  .court[data-editing] .edit-panel { display: flex; }
+  .edit-panel h4 { margin: 0 0 2px; font-size: 14px; letter-spacing: -.01em; }
+  .edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .edit-grid .field.full { grid-column: 1 / -1; }
+  .edit-actions { display: flex; gap: 10px; margin-top: auto; }
+  .edit-actions .btn { flex: 1; justify-content: center; }
 
   .phase-tag {
     align-self: flex-start; font-size: 10.5px; font-weight: 800;
@@ -166,6 +185,7 @@
   .court[data-phase="match"]  .phase-tag { color: var(--ok); border-color: rgba(56,224,138,.35); background: rgba(56,224,138,.08); }
   .court[data-phase="low"]    .phase-tag { color: var(--danger); border-color: rgba(255,77,94,.4); background: rgba(255,77,94,.1); }
   .court[data-phase="done"]   .phase-tag { color:#fff; border-color: var(--danger); background: var(--danger); }
+  .court[data-timeout]        .phase-tag { color: var(--timeout); border-color: rgba(58,160,255,.4); background: rgba(58,160,255,.12); }
 
   .clock {
     text-align: center; padding: 6px 18px 12px;
@@ -181,11 +201,13 @@
   .court[data-phase="low"]    .time { color: var(--danger); }
   .court[data-phase="done"]   .time { color: var(--danger); animation: flash 1s steps(1,end) infinite; }
   @keyframes flash { 50% { opacity: .25; } }
+  .court[data-timeout] .time { color: var(--timeout); animation: none; }
 
   .meter { height: 6px; border-radius: 999px; background: var(--bg); overflow: hidden; margin: 4px 18px 0; }
   .meter > div { height: 100%; width: 100%; background: var(--volt); transition: width .25s linear, background .3s; border-radius: 999px; }
   .court[data-phase="warmup"] .meter > div { background: var(--warm); }
   .court[data-phase="low"] .meter > div, .court[data-phase="done"] .meter > div { background: var(--danger); }
+  .court[data-timeout] .meter > div { background: var(--timeout); }
 
   .players { display:flex; align-items:center; gap:10px; padding: 16px 18px 6px; }
   .team { flex:1; min-width:0; }
@@ -201,6 +223,7 @@
 
   .controls { display: flex; gap: 10px; padding: 14px 18px 18px; }
   .controls .btn { flex: 1; justify-content: center; }
+  .controls .js-reset { flex: 0 0 auto; }
 
   .empty {
     text-align: center; color: var(--muted); padding: 70px 20px;
@@ -260,6 +283,10 @@
         <label for="cap">Time cap (min)</label>
         <input id="cap" type="number" min="0.5" step="0.5" value="12" />
       </div>
+      <div class="field">
+        <label for="tout">Time-out (sec)</label>
+        <input id="tout" type="number" min="5" step="5" value="60" />
+      </div>
       <button class="btn primary" type="submit">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
         Add court
@@ -307,6 +334,8 @@
       warmEnd() { beep(740, .15, "triangle", 0); beep(990, .22, "triangle", .16); },
       capWarn() { beep(520, .12, "square"); },
       capEnd()  { [0,.22,.44].forEach((d,i) => beep(660 - i*60, .26, "sawtooth", d, .22)); },
+      toStart() { beep(620, .12, "sine", 0); beep(820, .12, "sine", .12); },
+      toEnd()   { beep(880, .14, "triangle", 0); beep(660, .18, "triangle", .14); },
       toggle()  { enabled = !enabled; return enabled; },
       get on()  { return enabled; }
     };
@@ -326,24 +355,30 @@
       this.teamB   = d.teamB || "Team B";
       this.warmSec = Math.round((d.warmMin ?? 1) * 60);
       this.capSec  = Math.round((d.capMin ?? 12) * 60);
+      this.toutSec = Math.round(d.toutSec ?? 60);   // team time-out length
       // runtime
       this.phase   = d.phase   || "idle";   // idle | warmup | match | low | done
       this.remain  = d.remain ?? (this.warmSec > 0 ? this.warmSec : this.capSec);
       this.endAt   = d.endAt   || null;      // epoch ms when current phase ends (only while running)
+      this.toEnd   = d.toEnd   || null;      // epoch ms an active time-out ends (freezes the match)
+      this.toRemain = d.toRemain ?? 0;
       this.warnedLow = false;
+      this.editing = false;
       this.el = null;
     }
     get warmMin() { return +(this.warmSec / 60).toFixed(2); }
     get capMin()  { return +(this.capSec / 60).toFixed(2); }
     get running() { return this.endAt != null; }
+    get inTimeout() { return this.toEnd != null; }
   }
 
   // ---------- persistence ----------
   function save() {
     const data = courts.map(c => ({
       id:c.id, name:c.name, teamA:c.teamA, teamB:c.teamB,
-      warmMin:c.warmMin, capMin:c.capMin,
-      phase:c.phase, remain:c.remain, endAt:c.endAt
+      warmMin:c.warmMin, capMin:c.capMin, toutSec:c.toutSec,
+      phase:c.phase, remain:c.remain, endAt:c.endAt,
+      toEnd:c.toEnd, toRemain:c.toRemain
     }));
     try { localStorage.setItem(STORE, JSON.stringify(data)); } catch {}
   }
@@ -358,6 +393,8 @@
           if (left > 0) c.remain = left;
           else { c.endAt = null; c.remain = 0; /* will resolve on first tick */ c._needsResolve = true; }
         }
+        // a time-out that elapsed while the tab was closed just ends; the match stays paused
+        if (c.toEnd && c.toEnd <= Date.now()) { c.toEnd = null; c.toRemain = 0; }
         return c;
       });
     } catch { courts = []; }
@@ -366,6 +403,7 @@
   // ---------- phase engine ----------
   function startCourt(c) {
     if (c.running) return;
+    if (c.inTimeout) return;
     if (c.phase === "done") return;
     if (c.phase === "idle") {
       if (c.warmSec > 0) { c.phase = "warmup"; c.remain = c.warmSec; }
@@ -380,14 +418,58 @@
     c.endAt = null;
     save(); render();
   }
+  // ----- team time-out: freeze the match clock and run a short countdown -----
+  function startTimeout(c) {
+    if (c.inTimeout) return;
+    if (c.phase !== "match" && c.phase !== "low") return;   // only mid-match
+    if (c.running) { c.remain = Math.max(0, Math.round((c.endAt - Date.now()) / 1000)); c.endAt = null; }
+    c.toEnd = Date.now() + c.toutSec * 1000;
+    c.toRemain = c.toutSec;
+    Sound.toStart();
+    save(); render();
+  }
+  function endTimeout(c, chime = true) {
+    if (!c.inTimeout) return;
+    c.toEnd = null; c.toRemain = 0;
+    if (chime) Sound.toEnd();
+    c.endAt = Date.now() + c.remain * 1000;   // resume the match clock
+    save(); render();
+  }
   function resetCourt(c) {
     c.phase = "idle"; c.endAt = null; c.warnedLow = false;
+    c.toEnd = null; c.toRemain = 0;
     c.remain = c.warmSec > 0 ? c.warmSec : c.capSec;
     save(); render();
   }
   function removeCourt(c) {
     courts = courts.filter(x => x !== c);
     save(); render();
+  }
+
+  // ----- edit a court in place (swap players / retune timings, no delete) -----
+  function openEdit(c, el) {
+    el.querySelector(".e-name").value = c.name;
+    el.querySelector(".e-a").value    = c.teamA;
+    el.querySelector(".e-b").value    = c.teamB;
+    el.querySelector(".e-warm").value = c.warmMin;
+    el.querySelector(".e-cap").value  = c.capMin;
+    el.querySelector(".e-tout").value = c.toutSec;
+    c.editing = true; render();
+    el.querySelector(".e-name").focus();
+  }
+  function saveEdit(c, el) {
+    c.name  = el.querySelector(".e-name").value.trim() || c.name;
+    c.teamA = el.querySelector(".e-a").value.trim() || "Team A";
+    c.teamB = el.querySelector(".e-b").value.trim() || "Team B";
+    const w  = parseFloat(el.querySelector(".e-warm").value);
+    const cp = parseFloat(el.querySelector(".e-cap").value);
+    const to = parseFloat(el.querySelector(".e-tout").value);
+    if (!isNaN(w)  && w  >= 0) c.warmSec = Math.round(w  * 60);
+    if (!isNaN(cp) && cp >  0) c.capSec  = Math.round(cp * 60);
+    if (!isNaN(to) && to >  0) c.toutSec = Math.round(to);
+    // if the court hasn't started, reflect new timings on the idle clock
+    if (c.phase === "idle") c.remain = c.warmSec > 0 ? c.warmSec : c.capSec;
+    c.editing = false; save(); render();
   }
 
   // advance a court whose remaining hit zero
@@ -407,6 +489,16 @@
     let dirty = false;
     const now = Date.now();
     for (const c of courts) {
+      // an active time-out freezes the match clock and counts itself down
+      if (c.inTimeout) {
+        const tleft = Math.round((c.toEnd - now) / 1000);
+        if (tleft !== c.toRemain) { c.toRemain = Math.max(0, tleft); dirty = true; }
+        if (tleft <= 0) {                       // time-out over -> auto-resume match
+          c.toEnd = null; c.toRemain = 0; Sound.toEnd();
+          c.endAt = Date.now() + c.remain * 1000; dirty = true;
+        }
+        continue;
+      }
       if (!c.running) continue;
       const left = Math.round((c.endAt - now) / 1000);
       if (left !== c.remain) { c.remain = Math.max(0, left); dirty = true; }
@@ -434,7 +526,9 @@
     play:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="6 4 20 12 6 20 6 4"/></svg>',
     pause: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/></svg>',
     reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
-    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>'
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>',
+    timeout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="14" r="7"/><path d="M12 14V10M9 3h6"/></svg>',
+    edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>'
   };
 
   function buildCard(c) {
@@ -448,6 +542,7 @@
         </div>
         <div class="spacer"></div>
         <span class="phase-tag"></span>
+        <button class="icon-btn edit js-edit" title="Edit players &amp; settings">${icon.edit}</button>
         <button class="icon-btn js-del" title="Remove court">${icon.trash}</button>
       </div>
       <div class="clock"><div class="time"></div></div>
@@ -459,38 +554,76 @@
       </div>
       <div class="controls">
         <button class="btn primary js-toggle"></button>
-        <button class="btn ghost js-reset">${icon.reset} Reset</button>
+        <button class="btn to js-timeout"></button>
+        <button class="btn ghost js-reset" title="Reset court">${icon.reset}</button>
+      </div>
+      <div class="edit-panel">
+        <h4>Edit court — swap players for the next match</h4>
+        <div class="edit-grid">
+          <div class="field full"><label>Court name</label><input class="e-name" autocomplete="off" /></div>
+          <div class="field"><label>Player / Team A</label><input class="e-a" autocomplete="off" /></div>
+          <div class="field"><label>Player / Team B</label><input class="e-b" autocomplete="off" /></div>
+          <div class="field"><label>Warm-up (min)</label><input class="e-warm" type="number" min="0" step="0.5" /></div>
+          <div class="field"><label>Time cap (min)</label><input class="e-cap" type="number" min="0.5" step="0.5" /></div>
+          <div class="field full"><label>Time-out (sec)</label><input class="e-tout" type="number" min="5" step="5" /></div>
+        </div>
+        <div class="edit-actions">
+          <button class="btn primary e-save">Save changes</button>
+          <button class="btn ghost e-cancel">Cancel</button>
+        </div>
       </div>`;
-    el.querySelector(".js-del").onclick   = () => removeCourt(c);
-    el.querySelector(".js-reset").onclick = () => resetCourt(c);
-    el.querySelector(".js-toggle").onclick = () => c.running ? pauseCourt(c) : startCourt(c);
+    el.querySelector(".js-del").onclick     = () => removeCourt(c);
+    el.querySelector(".js-reset").onclick   = () => resetCourt(c);
+    el.querySelector(".js-toggle").onclick  = () => c.running ? pauseCourt(c) : startCourt(c);
+    el.querySelector(".js-timeout").onclick = () => c.inTimeout ? endTimeout(c) : startTimeout(c);
+    el.querySelector(".js-edit").onclick    = () => openEdit(c, el);
+    el.querySelector(".e-cancel").onclick   = () => { c.editing = false; render(); };
+    el.querySelector(".e-save").onclick     = () => saveEdit(c, el);
     c.el = el;
     return el;
   }
 
   function paint(c) {
     const el = c.el;
+    const inTO = c.inTimeout;
     el.dataset.phase = c.phase;
+    el.toggleAttribute("data-timeout", inTO);
+    el.toggleAttribute("data-editing", !!c.editing);
     el.querySelector(".court-title").textContent = c.name;
     el.querySelector(".court-sub").textContent =
-      `Warm-up ${fmt(c.warmSec)} · Cap ${fmt(c.capSec)}`;
-    el.querySelector(".phase-tag").textContent = phaseLabel[c.phase];
-    el.querySelector(".time").textContent = c.phase === "done" ? "TIME" : fmt(c.remain);
+      `Warm-up ${fmt(c.warmSec)} · Cap ${fmt(c.capSec)} · TO ${c.toutSec}s`;
+    el.querySelector(".phase-tag").textContent = inTO ? "Time-out" : phaseLabel[c.phase];
+    el.querySelector(".time").textContent =
+      inTO ? fmt(c.toRemain) : (c.phase === "done" ? "TIME" : fmt(c.remain));
     el.querySelector(".js-a").textContent = c.teamA;
     el.querySelector(".js-b").textContent = c.teamB;
 
-    // progress meter (fraction of current phase remaining)
-    const total = c.phase === "warmup" ? c.warmSec : c.capSec;
-    const frac = c.phase === "idle" ? 1 : (total ? c.remain / total : 0);
+    // progress meter (fraction of the active countdown remaining)
+    let frac;
+    if (inTO)                    frac = c.toutSec ? c.toRemain / c.toutSec : 0;
+    else if (c.phase === "idle") frac = 1;
+    else { const total = c.phase === "warmup" ? c.warmSec : c.capSec; frac = total ? c.remain / total : 0; }
     el.querySelector(".js-bar").style.width = `${Math.max(0, Math.min(1, frac)) * 100}%`;
 
+    // primary start / pause / resume button
     const tBtn = el.querySelector(".js-toggle");
     if (c.phase === "done") {
       tBtn.disabled = true; tBtn.innerHTML = `${icon.play} Done`;
+    } else if (inTO) {
+      tBtn.disabled = true; tBtn.innerHTML = `${icon.pause} Paused`;
     } else {
       tBtn.disabled = false;
       tBtn.innerHTML = c.running ? `${icon.pause} Pause`
                      : (c.phase === "idle" ? `${icon.play} Start` : `${icon.play} Resume`);
+    }
+
+    // time-out button (only meaningful mid-match)
+    const toBtn = el.querySelector(".js-timeout");
+    if (inTO) {
+      toBtn.disabled = false; toBtn.innerHTML = `${icon.timeout} Resume`;
+    } else {
+      const canTO = (c.phase === "match" || c.phase === "low");
+      toBtn.disabled = !canTO; toBtn.innerHTML = `${icon.timeout} Time-out`;
     }
   }
 
@@ -523,6 +656,7 @@
       teamB: $("#teamB").value.trim(),
       warmMin: parseFloat($("#warmup").value) || 0,
       capMin:  parseFloat($("#cap").value) || 1,
+      toutSec: parseFloat($("#tout").value) || 60,
     });
     courts.push(c);
     save(); render();
