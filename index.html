@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dink Clock — Pickleball Time-Cap Timer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:        #0b0f14;
+    --panel:     #121821;
+    --panel-2:   #182231;
+    --line:      #233044;
+    --ink:       #eaf2ff;
+    --muted:     #8294ad;
+    --volt:      #d6ff3f;   /* pickleball ball */
+    --volt-dim:  #9fc02f;
+    --warm:      #ffb020;   /* warm-up phase */
+    --danger:    #ff4d5e;   /* time low / capped */
+    --ok:        #38e08a;
+    --shadow:    0 18px 50px -20px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background:
+      radial-gradient(1100px 700px at 85% -10%, rgba(214,255,63,.10), transparent 60%),
+      radial-gradient(900px 600px at -10% 110%, rgba(56,224,138,.08), transparent 60%),
+      var(--bg);
+    color: var(--ink);
+    font-family: "Bricolage Grotesque", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100%;
+  }
+
+  /* ---------- top bar ---------- */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; gap: 18px;
+    padding: 16px 26px;
+    background: rgba(11,15,20,.82);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 13px; }
+  .ball {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: radial-gradient(circle at 32% 30%, #f3ffb0, var(--volt) 55%, var(--volt-dim));
+    position: relative; flex: none;
+    box-shadow: 0 0 0 4px rgba(214,255,63,.12), 0 6px 18px -4px rgba(214,255,63,.5);
+  }
+  .ball::before, .ball::after {
+    content:""; position:absolute; inset:0; border-radius:50%;
+    background:
+      radial-gradient(3px 3px at 50% 20%, rgba(0,0,0,.45) 60%, transparent 62%),
+      radial-gradient(3px 3px at 78% 42%, rgba(0,0,0,.45) 60%, transparent 62%),
+      radial-gradient(3px 3px at 60% 72%, rgba(0,0,0,.45) 60%, transparent 62%),
+      radial-gradient(3px 3px at 26% 60%, rgba(0,0,0,.45) 60%, transparent 62%),
+      radial-gradient(3px 3px at 38% 32%, rgba(0,0,0,.45) 60%, transparent 62%);
+  }
+  .brand h1 {
+    font-size: 21px; letter-spacing: -.02em; margin: 0; font-weight: 700;
+  }
+  .brand h1 span { color: var(--volt); }
+  .brand small { display:block; color: var(--muted); font-size: 11.5px; letter-spacing:.14em; text-transform: uppercase; font-weight:600; }
+
+  .spacer { flex: 1; }
+
+  .btn {
+    font-family: inherit; font-weight: 600; font-size: 14px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+    padding: 10px 16px; border-radius: 11px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: transform .08s ease, background .15s ease, border-color .15s ease, opacity .15s;
+  }
+  .btn:hover { transform: translateY(-1px); border-color: #34465f; }
+  .btn:active { transform: translateY(0); }
+  .btn.primary { background: var(--volt); color: #16200a; border-color: transparent; }
+  .btn.primary:hover { background: #e4ff66; }
+  .btn.ghost { background: transparent; }
+  .btn.danger { color: var(--danger); border-color: rgba(255,77,94,.4); background: rgba(255,77,94,.08); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  .btn svg { width: 16px; height: 16px; }
+
+  /* ---------- layout ---------- */
+  main { padding: 26px; max-width: 1500px; margin: 0 auto; }
+
+  .setup {
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--line); border-radius: 18px;
+    padding: 22px 24px; margin-bottom: 26px; box-shadow: var(--shadow);
+  }
+  .setup h2 { margin: 0 0 4px; font-size: 16px; letter-spacing: -.01em; }
+  .setup p.hint { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 0.9fr 0.9fr auto;
+    gap: 12px; align-items: end;
+  }
+  @media (max-width: 920px){ .form-grid{ grid-template-columns: 1fr 1fr; } }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .field input {
+    font-family: inherit; font-size: 15px; color: var(--ink);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 11px 13px; outline: none; transition: border-color .15s, box-shadow .15s;
+    width: 100%;
+  }
+  .field input:focus { border-color: var(--volt-dim); box-shadow: 0 0 0 3px rgba(214,255,63,.14); }
+  .field.dual { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .field.dual .sub { display:flex; flex-direction:column; gap:6px; }
+
+  .stat-row { display:flex; gap: 22px; margin-top: 18px; flex-wrap: wrap; }
+  .stat { color: var(--muted); font-size: 12.5px; }
+  .stat b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  /* ---------- court grid ---------- */
+  .courts {
+    display: grid; gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  }
+
+  .court {
+    position: relative; overflow: hidden;
+    background: linear-gradient(180deg, var(--panel), #0e141d);
+    border: 1px solid var(--line); border-radius: 20px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column;
+  }
+  .court::before {
+    content:""; position:absolute; inset:0 0 auto 0; height: 4px;
+    background: var(--line); transition: background .3s;
+  }
+  .court[data-phase="warmup"]::before { background: linear-gradient(90deg, var(--warm), #ff7a00); }
+  .court[data-phase="match"]::before  { background: linear-gradient(90deg, var(--volt), var(--ok)); }
+  .court[data-phase="low"]::before    { background: linear-gradient(90deg, var(--danger), #ff8a3d); }
+  .court[data-phase="done"]::before   { background: var(--danger); }
+
+  .court-head {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 18px 18px 8px;
+  }
+  .court-title { font-size: 19px; font-weight: 700; letter-spacing:-.01em; }
+  .court-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .court-head .spacer { flex: 1; }
+  .icon-btn {
+    background: transparent; border: none; color: var(--muted);
+    cursor: pointer; padding: 6px; border-radius: 8px; line-height: 0;
+    transition: color .15s, background .15s;
+  }
+  .icon-btn:hover { color: var(--danger); background: rgba(255,77,94,.1); }
+  .icon-btn svg { width: 17px; height: 17px; }
+
+  .phase-tag {
+    align-self: flex-start; font-size: 10.5px; font-weight: 800;
+    letter-spacing: .14em; text-transform: uppercase;
+    padding: 5px 9px; border-radius: 999px; margin-top: 3px;
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+  }
+  .court[data-phase="warmup"] .phase-tag { color: var(--warm); border-color: rgba(255,176,32,.35); background: rgba(255,176,32,.08); }
+  .court[data-phase="match"]  .phase-tag { color: var(--ok); border-color: rgba(56,224,138,.35); background: rgba(56,224,138,.08); }
+  .court[data-phase="low"]    .phase-tag { color: var(--danger); border-color: rgba(255,77,94,.4); background: rgba(255,77,94,.1); }
+  .court[data-phase="done"]   .phase-tag { color:#fff; border-color: var(--danger); background: var(--danger); }
+
+  .clock {
+    text-align: center; padding: 6px 18px 12px;
+  }
+  .time {
+    font-family: "Space Mono", monospace; font-weight: 700;
+    font-size: clamp(60px, 12vw, 86px); line-height: 1;
+    letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+    color: var(--ink); transition: color .3s;
+  }
+  .court[data-phase="warmup"] .time { color: var(--warm); }
+  .court[data-phase="match"]  .time { color: var(--volt); }
+  .court[data-phase="low"]    .time { color: var(--danger); }
+  .court[data-phase="done"]   .time { color: var(--danger); animation: flash 1s steps(1,end) infinite; }
+  @keyframes flash { 50% { opacity: .25; } }
+
+  .meter { height: 6px; border-radius: 999px; background: var(--bg); overflow: hidden; margin: 4px 18px 0; }
+  .meter > div { height: 100%; width: 100%; background: var(--volt); transition: width .25s linear, background .3s; border-radius: 999px; }
+  .court[data-phase="warmup"] .meter > div { background: var(--warm); }
+  .court[data-phase="low"] .meter > div, .court[data-phase="done"] .meter > div { background: var(--danger); }
+
+  .players { display:flex; align-items:center; gap:10px; padding: 16px 18px 6px; }
+  .team { flex:1; min-width:0; }
+  .team .name {
+    font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .team .role { font-size: 10.5px; color: var(--muted); letter-spacing:.12em; text-transform:uppercase; font-weight:700; }
+  .team.right { text-align: right; }
+  .vs {
+    font-family:"Space Mono",monospace; font-weight:700; color: var(--muted);
+    font-size: 13px; flex: none; padding: 4px 9px; border:1px solid var(--line); border-radius: 8px;
+  }
+
+  .controls { display: flex; gap: 10px; padding: 14px 18px 18px; }
+  .controls .btn { flex: 1; justify-content: center; }
+
+  .empty {
+    text-align: center; color: var(--muted); padding: 70px 20px;
+    border: 1.5px dashed var(--line); border-radius: 18px;
+  }
+  .empty .ball { margin: 0 auto 16px; width:38px; height:38px; }
+  .empty b { color: var(--ink); }
+
+  footer { text-align:center; color:var(--muted); font-size:12px; padding: 30px; }
+  kbd { font-family:"Space Mono",monospace; background:var(--panel-2); border:1px solid var(--line); border-bottom-width:2px; border-radius:6px; padding:1px 6px; font-size:11px; color:var(--ink); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="ball"></div>
+    <div>
+      <h1>Dink<span>Clock</span></h1>
+      <small>Pickleball time-cap timer</small>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn ghost" id="startAll" title="Start every idle court">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    Start all
+  </button>
+  <button class="btn ghost" id="resetAll" title="Reset every court">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+    Reset all
+  </button>
+</header>
+
+<main>
+  <section class="setup">
+    <h2>Add a court</h2>
+    <p class="hint">Set the warm-up and time-cap, name the players, then hit add. The clock starts when you press <b>Start</b> on the court.</p>
+    <form id="courtForm" class="form-grid">
+      <div class="field">
+        <label for="courtName">Court</label>
+        <input id="courtName" placeholder="Court 1" autocomplete="off" />
+      </div>
+      <div class="field dual">
+        <div class="sub">
+          <label for="teamA">Player / Team A</label>
+          <input id="teamA" placeholder="Team Dinkers" autocomplete="off" />
+        </div>
+        <div class="sub">
+          <label for="teamB">Player / Team B</label>
+          <input id="teamB" placeholder="Net Ninjas" autocomplete="off" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="warmup">Warm-up (min)</label>
+        <input id="warmup" type="number" min="0" step="0.5" value="1" />
+      </div>
+      <div class="field">
+        <label for="cap">Time cap (min)</label>
+        <input id="cap" type="number" min="0.5" step="0.5" value="12" />
+      </div>
+      <button class="btn primary" type="submit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+        Add court
+      </button>
+    </form>
+    <div class="stat-row">
+      <div class="stat">Courts: <b id="statCount">0</b></div>
+      <div class="stat">Running: <b id="statRunning">0</b></div>
+      <div class="stat">Sound: <b id="statSound" style="cursor:pointer">on</b></div>
+    </div>
+  </section>
+
+  <section class="courts" id="courts"></section>
+  <div class="empty" id="empty">
+    <div class="ball"></div>
+    <p>No courts yet. <b>Add your first court above</b> to start the clock.</p>
+  </div>
+</main>
+
+<footer>
+  Built for tournament desks · <kbd>Space</kbd> add court · timers survive a page refresh
+</footer>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- tiny beeper (WebAudio, no files) ----------
+  const Sound = (() => {
+    let ctx, enabled = true;
+    const ensure = () => { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); return ctx; };
+    function beep(freq = 880, dur = 0.18, type = "sine", when = 0, gain = 0.18) {
+      if (!enabled) return;
+      const c = ensure();
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = type; o.frequency.value = freq;
+      o.connect(g); g.connect(c.destination);
+      const t = c.currentTime + when;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(gain, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.start(t); o.stop(t + dur + 0.02);
+    }
+    return {
+      warmEnd() { beep(740, .15, "triangle", 0); beep(990, .22, "triangle", .16); },
+      capWarn() { beep(520, .12, "square"); },
+      capEnd()  { [0,.22,.44].forEach((d,i) => beep(660 - i*60, .26, "sawtooth", d, .22)); },
+      toggle()  { enabled = !enabled; return enabled; },
+      get on()  { return enabled; }
+    };
+  })();
+
+  // ---------- state ----------
+  const STORE = "dinkclock.courts.v1";
+  /** @type {Court[]} */
+  let courts = [];
+  const $ = (s, r = document) => r.querySelector(s);
+
+  class Court {
+    constructor(d) {
+      this.id      = d.id || (Date.now() + Math.random().toString(36).slice(2, 6));
+      this.name    = d.name;
+      this.teamA   = d.teamA || "Team A";
+      this.teamB   = d.teamB || "Team B";
+      this.warmSec = Math.round((d.warmMin ?? 1) * 60);
+      this.capSec  = Math.round((d.capMin ?? 12) * 60);
+      // runtime
+      this.phase   = d.phase   || "idle";   // idle | warmup | match | low | done
+      this.remain  = d.remain ?? (this.warmSec > 0 ? this.warmSec : this.capSec);
+      this.endAt   = d.endAt   || null;      // epoch ms when current phase ends (only while running)
+      this.warnedLow = false;
+      this.el = null;
+    }
+    get warmMin() { return +(this.warmSec / 60).toFixed(2); }
+    get capMin()  { return +(this.capSec / 60).toFixed(2); }
+    get running() { return this.endAt != null; }
+  }
+
+  // ---------- persistence ----------
+  function save() {
+    const data = courts.map(c => ({
+      id:c.id, name:c.name, teamA:c.teamA, teamB:c.teamB,
+      warmMin:c.warmMin, capMin:c.capMin,
+      phase:c.phase, remain:c.remain, endAt:c.endAt
+    }));
+    try { localStorage.setItem(STORE, JSON.stringify(data)); } catch {}
+  }
+  function load() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORE) || "[]");
+      courts = raw.map(d => {
+        const c = new Court(d);
+        // reconcile a clock that was running while the tab was closed
+        if (c.endAt) {
+          const left = Math.round((c.endAt - Date.now()) / 1000);
+          if (left > 0) c.remain = left;
+          else { c.endAt = null; c.remain = 0; /* will resolve on first tick */ c._needsResolve = true; }
+        }
+        return c;
+      });
+    } catch { courts = []; }
+  }
+
+  // ---------- phase engine ----------
+  function startCourt(c) {
+    if (c.running) return;
+    if (c.phase === "done") return;
+    if (c.phase === "idle") {
+      if (c.warmSec > 0) { c.phase = "warmup"; c.remain = c.warmSec; }
+      else               { c.phase = "match";  c.remain = c.capSec; }
+    }
+    c.endAt = Date.now() + c.remain * 1000;
+    save(); render();
+  }
+  function pauseCourt(c) {
+    if (!c.running) return;
+    c.remain = Math.max(0, Math.round((c.endAt - Date.now()) / 1000));
+    c.endAt = null;
+    save(); render();
+  }
+  function resetCourt(c) {
+    c.phase = "idle"; c.endAt = null; c.warnedLow = false;
+    c.remain = c.warmSec > 0 ? c.warmSec : c.capSec;
+    save(); render();
+  }
+  function removeCourt(c) {
+    courts = courts.filter(x => x !== c);
+    save(); render();
+  }
+
+  // advance a court whose remaining hit zero
+  function transition(c) {
+    if (c.phase === "warmup") {
+      Sound.warmEnd();
+      c.phase = "match"; c.remain = c.capSec; c.warnedLow = false;
+      c.endAt = Date.now() + c.capSec * 1000;
+    } else if (c.phase === "match" || c.phase === "low") {
+      Sound.capEnd();
+      c.phase = "done"; c.remain = 0; c.endAt = null;
+    }
+  }
+
+  // ---------- main loop ----------
+  function tick() {
+    let dirty = false;
+    const now = Date.now();
+    for (const c of courts) {
+      if (!c.running) continue;
+      const left = Math.round((c.endAt - now) / 1000);
+      if (left !== c.remain) { c.remain = Math.max(0, left); dirty = true; }
+
+      // low-time warning during match (last 60s)
+      if ((c.phase === "match" || c.phase === "low") && c.remain <= 60 && c.remain > 0) {
+        if (c.phase === "match") { c.phase = "low"; dirty = true; }
+        if (!c.warnedLow) { Sound.capWarn(); c.warnedLow = true; }
+      }
+      if (left <= 0) { transition(c); dirty = true; }
+    }
+    if (dirty) { save(); render(); }
+  }
+  setInterval(tick, 250);
+
+  // ---------- rendering ----------
+  const fmt = (s) => {
+    s = Math.max(0, Math.round(s));
+    const m = Math.floor(s / 60), ss = s % 60;
+    return `${String(m).padStart(2,"0")}:${String(ss).padStart(2,"0")}`;
+  };
+  const phaseLabel = { idle:"Ready", warmup:"Warm-up", match:"Match", low:"Final minute", done:"Time cap" };
+
+  const icon = {
+    play:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="6 4 20 12 6 20 6 4"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/></svg>',
+    reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>'
+  };
+
+  function buildCard(c) {
+    const el = document.createElement("article");
+    el.className = "court";
+    el.innerHTML = `
+      <div class="court-head">
+        <div>
+          <div class="court-title"></div>
+          <div class="court-sub"></div>
+        </div>
+        <div class="spacer"></div>
+        <span class="phase-tag"></span>
+        <button class="icon-btn js-del" title="Remove court">${icon.trash}</button>
+      </div>
+      <div class="clock"><div class="time"></div></div>
+      <div class="meter"><div class="js-bar"></div></div>
+      <div class="players">
+        <div class="team left"><div class="role">Team A</div><div class="name js-a"></div></div>
+        <div class="vs">VS</div>
+        <div class="team right"><div class="role">Team B</div><div class="name js-b"></div></div>
+      </div>
+      <div class="controls">
+        <button class="btn primary js-toggle"></button>
+        <button class="btn ghost js-reset">${icon.reset} Reset</button>
+      </div>`;
+    el.querySelector(".js-del").onclick   = () => removeCourt(c);
+    el.querySelector(".js-reset").onclick = () => resetCourt(c);
+    el.querySelector(".js-toggle").onclick = () => c.running ? pauseCourt(c) : startCourt(c);
+    c.el = el;
+    return el;
+  }
+
+  function paint(c) {
+    const el = c.el;
+    el.dataset.phase = c.phase;
+    el.querySelector(".court-title").textContent = c.name;
+    el.querySelector(".court-sub").textContent =
+      `Warm-up ${fmt(c.warmSec)} · Cap ${fmt(c.capSec)}`;
+    el.querySelector(".phase-tag").textContent = phaseLabel[c.phase];
+    el.querySelector(".time").textContent = c.phase === "done" ? "TIME" : fmt(c.remain);
+    el.querySelector(".js-a").textContent = c.teamA;
+    el.querySelector(".js-b").textContent = c.teamB;
+
+    // progress meter (fraction of current phase remaining)
+    const total = c.phase === "warmup" ? c.warmSec : c.capSec;
+    const frac = c.phase === "idle" ? 1 : (total ? c.remain / total : 0);
+    el.querySelector(".js-bar").style.width = `${Math.max(0, Math.min(1, frac)) * 100}%`;
+
+    const tBtn = el.querySelector(".js-toggle");
+    if (c.phase === "done") {
+      tBtn.disabled = true; tBtn.innerHTML = `${icon.play} Done`;
+    } else {
+      tBtn.disabled = false;
+      tBtn.innerHTML = c.running ? `${icon.pause} Pause`
+                     : (c.phase === "idle" ? `${icon.play} Start` : `${icon.play} Resume`);
+    }
+  }
+
+  const courtsEl = $("#courts"), emptyEl = $("#empty");
+  function render() {
+    // sync DOM nodes to state list
+    const present = new Set();
+    courts.forEach((c, i) => {
+      if (!c.el || !c.el.isConnected) courtsEl.appendChild(buildCard(c));
+      // keep order
+      if (courtsEl.children[i] !== c.el) courtsEl.insertBefore(c.el, courtsEl.children[i] || null);
+      paint(c);
+      present.add(c.el);
+    });
+    [...courtsEl.children].forEach(ch => { if (!present.has(ch)) ch.remove(); });
+
+    emptyEl.style.display = courts.length ? "none" : "block";
+    $("#statCount").textContent   = courts.length;
+    $("#statRunning").textContent = courts.filter(c => c.running).length;
+    $("#statSound").textContent   = Sound.on ? "on" : "off";
+  }
+
+  // ---------- form ----------
+  $("#courtForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = $("#courtName").value.trim() || `Court ${courts.length + 1}`;
+    const c = new Court({
+      name,
+      teamA: $("#teamA").value.trim(),
+      teamB: $("#teamB").value.trim(),
+      warmMin: parseFloat($("#warmup").value) || 0,
+      capMin:  parseFloat($("#cap").value) || 1,
+    });
+    courts.push(c);
+    save(); render();
+    // reset only the names; keep cap/warm-up for fast repeat entry
+    $("#courtName").value = ""; $("#teamA").value = ""; $("#teamB").value = "";
+    $("#courtName").focus();
+  });
+
+  $("#startAll").onclick = () => { courts.forEach(c => { if (c.phase !== "done" && !c.running) startCourt(c); }); };
+  $("#resetAll").onclick = () => { courts.forEach(resetCourt); };
+  $("#statSound").onclick = () => { Sound.toggle(); render(); };
+
+  // keyboard: Space focuses the add form (when not typing)
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space" && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) {
+      e.preventDefault(); $("#courtName").focus();
+    }
+  });
+
+  // ---------- boot ----------
+  load();
+  // resolve any clocks that expired while the tab was closed
+  courts.forEach(c => { if (c._needsResolve) { c.endAt = 1; transition(c); c.endAt = null; } });
+  render();
+  $("#courtName").focus();
+})();
+</script>
+</body>
+</html>
